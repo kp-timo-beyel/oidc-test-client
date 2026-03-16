@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OIDC Test Client</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container { max-width: 960px; margin: 0 auto; }
+
+        header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid #1e293b;
+        }
+
+        header h1 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #f1f5f9;
+        }
+
+        .badge {
+            padding: 0.2rem 0.65rem;
+            border-radius: 9999px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+        .badge-staging    { background: #fef08a18; color: #fde047; border: 1px solid #fde04730; }
+        .badge-production { background: #f0abfc18; color: #e879f9; border: 1px solid #e879f930; }
+        .badge-local      { background: #d1fae518; color: #34d399; border: 1px solid #34d39930; }
+        .badge-custom     { background: #38bdf818; color: #38bdf8; border: 1px solid #38bdf830; }
+
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 1.25rem;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+        .form-group.span2 { grid-column: 1 / -1; }
+
+        label {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+        label .opt { color: #475569; font-weight: 400; }
+
+        input, select {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 0.45rem;
+            color: #e2e8f0;
+            font-size: 0.875rem;
+            padding: 0.6rem 0.875rem;
+            width: 100%;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px #3b82f620;
+        }
+        input::placeholder { color: #475569; }
+        select option { background: #1e293b; }
+
+        .actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-top: 1.25rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.6rem 1.2rem;
+            border-radius: 0.45rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: all 0.15s;
+            text-decoration: none;
+        }
+        .btn-primary { background: #3b82f6; color: #fff; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-ghost {
+            background: transparent;
+            color: #64748b;
+            border: 1px solid #334155;
+        }
+        .btn-ghost:hover { background: #1e293b; color: #94a3b8; }
+        .btn-danger {
+            background: transparent;
+            color: #f87171;
+            border: 1px solid #7f1d1d;
+        }
+        .btn-danger:hover { background: #450a0a; }
+
+        .redirect-hint {
+            margin-top: 1rem;
+            padding: 0.7rem 0.9rem;
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 0.45rem;
+            font-size: 0.78rem;
+            color: #475569;
+            line-height: 1.6;
+        }
+        .redirect-hint code { color: #7dd3fc; font-family: monospace; }
+
+        /* Status messages */
+        .status {
+            padding: 0.75rem 1rem;
+            border-radius: 0.45rem;
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
+        .status.show { display: block; }
+        .status-loading { background: #0c2a4a; color: #7dd3fc; border: 1px solid #0369a1; }
+        .status-error   { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
+        .status-success { background: #052e16; color: #86efac; border: 1px solid #14532d; }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 1.25rem;
+        }
+        .tab {
+            padding: 0.6rem 1.1rem;
+            font-size: 0.85rem;
+            color: #64748b;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            transition: all 0.15s;
+            user-select: none;
+        }
+        .tab:hover { color: #94a3b8; }
+        .tab.active { color: #7dd3fc; border-bottom-color: #3b82f6; }
+
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* Token display */
+        pre {
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            overflow-x: auto;
+            font-size: 0.8rem;
+            line-height: 1.7;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .json-key     { color: #7dd3fc; }
+        .json-string  { color: #86efac; }
+        .json-number  { color: #fcd34d; }
+        .json-boolean { color: #f472b6; }
+        .json-null    { color: #94a3b8; }
+
+        .section-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin: 1rem 0 0.5rem;
+        }
+        .section-label:first-child { margin-top: 0; }
+
+        /* JWT visual strip */
+        .jwt-strip {
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            font-size: 0.72rem;
+            line-height: 1.5;
+            word-break: break-all;
+            margin-bottom: 0.75rem;
+            padding: 0.75rem;
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 0.45rem;
+        }
+        .jwt-h { color: #f472b6; }
+        .jwt-p { color: #a78bfa; }
+        .jwt-s { color: #34d399; }
+        .jwt-dot { color: #334155; }
+
+        /* Time chips */
+        .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.3rem 0.7rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            background: #0f172a;
+            border: 1px solid #334155;
+        }
+        .chip .lbl { color: #475569; }
+        .chip .val { color: #e2e8f0; }
+        .chip.expired { background: #450a0a18; border-color: #7f1d1d; }
+        .chip.expired .val { color: #fca5a5; }
+
+        /* Results header */
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.25rem;
+        }
+
+
+        /* Device Flow */
+        .device-code-display {
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            font-size: 2.2rem;
+            font-weight: 700;
+            letter-spacing: 0.35em;
+            color: #f1f5f9;
+            text-align: center;
+            padding: 1.25rem 1rem;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 0.5rem;
+            margin: 0.75rem 0;
+        }
+        .device-verify-url {
+            display: block;
+            text-align: center;
+            font-size: 1rem;
+            color: #7dd3fc;
+            text-decoration: none;
+            margin-bottom: 0.25rem;
+            word-break: break-all;
+        }
+        .device-verify-url:hover { text-decoration: underline; }
+        .device-hint {
+            text-align: center;
+            color: #64748b;
+            font-size: 0.8rem;
+            margin-bottom: 0.25rem;
+        }
+        #device-qr {
+            display: flex;
+            justify-content: center;
+            margin: 0.75rem 0 0.25rem;
+        }
+        #device-qr canvas, #device-qr img {
+            border-radius: 0.5rem;
+            border: 6px solid #f1f5f9;
+        }
+
+        @media (max-width: 600px) {
+            body { padding: 1rem; }
+            .form-grid { grid-template-columns: 1fr; }
+            .form-group.span2 { grid-column: 1; }
+            .session-card { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <header>
+        <h1>OIDC Test Client</h1>
+        <span id="env-badge" class="badge badge-staging">Staging</span>
+    </header>
+
+    <div id="status" class="status"></div>
+    <div id="curl-hint" style="display:none; margin-bottom:1rem;">
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;">
+            <span style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.08em;">Equivalent curl command</span>
+            <button class="btn btn-ghost" onclick="copyCurl()" style="padding:0.15rem 0.5rem;font-size:0.72rem;">Copy</button>
+        </div>
+        <pre id="curl-pre" style="font-size:0.78rem;word-break:break-all;white-space:pre-wrap;"></pre>
+    </div>
+
+    <!-- ── Config form ── -->
+    <div id="section-config">
+        <div class="card">
+            <div class="card-title">Configuration</div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="sel-env">Environment</label>
+                    <select id="sel-env" onchange="onEnvChange()">
+                        <option value="staging">Staging</option>
+                        <option value="production">Production</option>
+                        <option value="local">Local</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                </div>
+                <div class="form-group span2" id="custom-url-group" style="display:none;">
+                    <label for="inp-custom-url">Custom Issuer Root URL</label>
+                    <input id="inp-custom-url" type="text" placeholder="e.g. https://keycloak.example.com/realms/myrealm" oninput="onCustomUrlChange()" />
+                </div>
+                <div class="form-group">
+                    <label for="inp-client">Client ID</label>
+                    <input id="inp-client" type="text" placeholder="e.g. my-app-client" />
+                </div>
+                <div class="form-group">
+                    <label for="inp-scope">Scopes</label>
+                    <input id="inp-scope" type="text" placeholder="e.g. openid profile email" value="openid profile email" />
+                </div>
+                <div class="form-group">
+                    <label for="inp-acr">ACR Values <span class="opt">(optional)</span></label>
+                    <input id="inp-acr" type="text" placeholder="e.g. urn:mace:incommon:iap:silver" />
+                </div>
+                <div class="form-group">
+                    <label for="inp-login-hint">Login Hint <span class="opt">(optional)</span></label>
+                    <input id="inp-login-hint" type="text" placeholder="e.g. user@example.com" />
+                </div>
+                <div class="form-group span2">
+                    <label style="flex-direction:row;align-items:center;gap:0.5rem;cursor:pointer;">
+                        <input id="chk-force-login" type="checkbox" style="width:auto;accent-color:#3b82f6;" />
+                        Force login <span class="opt">(prompt=login, ignores active SSO session)</span>
+                    </label>
+                </div>
+                <div class="form-group span2">
+                    <label style="flex-direction:row;align-items:center;gap:0.5rem;cursor:pointer;">
+                        <input id="chk-offline" type="checkbox" style="width:auto;accent-color:#3b82f6;" />
+                        Offline access <span class="opt">(scope=offline_access, refresh token survives SSO session)</span>
+                    </label>
+                </div>
+                <div class="form-group span2">
+                    <label style="flex-direction:row;align-items:center;gap:0.5rem;cursor:pointer;">
+                        <input id="chk-curl-only" type="checkbox" style="width:auto;accent-color:#f59e0b;" />
+                        curl only <span class="opt">(skip auto token exchange — show curl command instead, code stays valid)</span>
+                    </label>
+                </div>
+            </div>
+            <div class="actions">
+                <button class="btn btn-primary" onclick="startLogin()">Start Login →</button>
+                <button class="btn btn-ghost" onclick="startDeviceFlow()">Device Flow</button>
+            </div>
+            <div class="redirect-hint">
+                Redirect&nbsp;URI: <code id="lbl-redirect"></code><br>
+                This URI must be registered as a valid redirect URI in your Keycloak client.
+            </div>
+            <div id="auth-url-box" style="display:none; margin-top:1rem;">
+                <div style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.5rem;">
+                    Authorization URL
+                    <button class="btn btn-ghost" onclick="copyAuthUrl()" style="padding:0.2rem 0.6rem;font-size:0.72rem;margin-left:0.5rem;">Copy</button>
+                </div>
+                <pre id="auth-url-pre" style="word-break:break-all;white-space:pre-wrap;font-size:0.78rem;"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Device Flow ── -->
+    <div id="section-device" style="display:none; margin-bottom:1.5rem;">
+        <div class="card">
+            <div class="results-header">
+                <div class="card-title" style="margin-bottom:0">Device Authorization</div>
+                <button class="btn btn-ghost" onclick="cancelDeviceFlow()">← Cancel</button>
+            </div>
+            <div id="device-poll-status" style="margin-top:0.75rem;"></div>
+            <div id="device-code-area" style="display:none; margin-top:0.75rem;">
+                <p class="device-hint">Scan the QR code or open the URL on any device:</p>
+                <div id="device-qr"></div>
+                <a id="device-verify-link" class="device-verify-url" href="#" target="_blank"></a>
+                <p class="device-hint" style="margin-top:0.75rem;">Then enter this code:</p>
+                <div id="device-user-code" class="device-code-display"></div>
+                <p id="device-expires-label" class="device-hint" style="margin-top:0.5rem;"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Results ── -->
+    <div id="section-results" style="display:none">
+        <div class="card">
+            <div class="results-header">
+                <div class="card-title" style="margin-bottom:0">Token Response</div>
+                <div style="display:flex;gap:0.5rem;">
+                    <button class="btn btn-danger" id="btn-logout" onclick="logout()" style="display:none">Logout</button>
+                    <button class="btn btn-ghost" onclick="goBack()">← Back</button>
+                </div>
+            </div>
+
+            <div class="tabs">
+                <div class="tab active" data-panel="callback" onclick="switchTab(this,'callback')">Callback</div>
+                <div class="tab"        data-panel="raw"      onclick="switchTab(this,'raw')">Raw Response</div>
+                <div class="tab"        data-panel="access"   onclick="switchTab(this,'access')">Access Token</div>
+                <div class="tab"        data-panel="id"       onclick="switchTab(this,'id')">ID Token</div>
+                <div class="tab"        data-panel="refresh"  onclick="switchTab(this,'refresh')" id="tab-refresh"  style="display:none">Refresh Token</div>
+            </div>
+
+            <!-- Callback -->
+            <div class="tab-panel active" id="panel-callback">
+                <pre id="pre-callback"></pre>
+                <div id="manual-exchange-box" style="display:none; margin-top:1rem;">
+                    <div class="card-title" style="margin-bottom:0.75rem;">Manual Token Exchange</div>
+                    <div class="form-grid" style="margin-bottom:1rem;">
+                        <div class="form-group">
+                            <label for="me-env">Environment</label>
+                            <select id="me-env" onchange="onMeEnvChange()">
+                                <option value="staging">Staging</option>
+                                <option value="production">Production</option>
+                                <option value="local">Local</option>
+                                <option value="custom">Custom</option>
+                            </select>
+                        </div>
+                        <div class="form-group span2" id="me-custom-url-group" style="display:none;">
+                            <label for="me-custom-url">Custom Issuer Root URL</label>
+                            <input id="me-custom-url" type="text" placeholder="e.g. https://keycloak.example.com/realms/myrealm" oninput="onMeCustomUrlChange()" />
+                        </div>
+                        <div class="form-group">
+                            <label for="me-client">Client ID</label>
+                            <input id="me-client" type="text" placeholder="e.g. my-app-client" />
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="manualExchange()">Exchange Code →</button>
+                </div>
+            </div>
+
+            <!-- Raw -->
+            <div class="tab-panel" id="panel-raw">
+                <pre id="pre-raw"></pre>
+            </div>
+
+            <!-- Access Token -->
+            <div class="tab-panel" id="panel-access">
+                <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem;">
+                    <button class="btn btn-ghost" id="btn-refresh-token" onclick="refreshTokens()" style="display:none">↻ Refresh Access Token</button>
+                </div>
+                <div id="jwt-strip-access" class="jwt-strip"></div>
+                <div id="chips-access" class="chips"></div>
+                <div class="section-label">Header</div>
+                <pre id="pre-access-header"></pre>
+                <div class="section-label">Payload</div>
+                <pre id="pre-access-payload"></pre>
+            </div>
+
+            <!-- ID Token -->
+            <div class="tab-panel" id="panel-id">
+                <div id="jwt-strip-id" class="jwt-strip"></div>
+                <div id="chips-id" class="chips"></div>
+                <div class="section-label">Header</div>
+                <pre id="pre-id-header"></pre>
+                <div class="section-label">Payload</div>
+                <pre id="pre-id-payload"></pre>
+            </div>
+
+            <!-- Refresh Token -->
+            <div class="tab-panel" id="panel-refresh">
+                <div class="section-label">Raw Token</div>
+                <pre id="pre-refresh"></pre>
+            </div>
+
+
+        </div>
+    </div>
+
+</div><!-- /container -->
+
+<script>
+/* ── Constants ─────────────────────────────────────────────── */
+const ISSUER_URLS = {
+    staging:    'https://stg.auth.xvtest.net/realms/xvpn',
+    production: 'https://auth.expressvpn.com/realms/xvpn',
+    local:      'http://localhost:8087/realms/xvpn'
+};
+
+// localStorage key prefix – avoids collisions with other apps on same origin
+const LS = 'oidc_tc_';
+const LS_CUSTOM_URL = LS + 'custom_url';
+
+function getIssuerUrl(env) {
+    if (env === 'custom') return localStorage.getItem(LS_CUSTOM_URL) || '';
+    return ISSUER_URLS[env] || '';
+}
+
+/* ── Helpers: UI ────────────────────────────────────────────── */
+function showStatus(msg, type) {
+    const el = document.getElementById('status');
+    if (!msg) {
+        el.className = 'status'; el.textContent = '';
+        document.getElementById('curl-hint').style.display = 'none';
+        return;
+    }
+    el.className = `status status-${type} show`;
+    el.textContent = msg;
+}
+
+function onEnvChange() {
+    const env = document.getElementById('sel-env').value;
+    const badge = document.getElementById('env-badge');
+    const labels = { staging: 'Staging', production: 'Production', local: 'Local', custom: 'Custom' };
+    badge.textContent = labels[env] || env;
+    badge.className   = `badge badge-${env}`;
+    document.getElementById('custom-url-group').style.display = env === 'custom' ? '' : 'none';
+}
+
+function onMeEnvChange() {
+    const env = document.getElementById('me-env').value;
+    document.getElementById('me-custom-url-group').style.display = env === 'custom' ? '' : 'none';
+    if (env === 'custom') {
+        document.getElementById('me-custom-url').value = localStorage.getItem(LS_CUSTOM_URL) || '';
+    }
+}
+
+function onCustomUrlChange() {
+    const url = document.getElementById('inp-custom-url').value;
+    localStorage.setItem(LS_CUSTOM_URL, url);
+    saveSettings();
+}
+
+function onMeCustomUrlChange() {
+    const url = document.getElementById('me-custom-url').value;
+    localStorage.setItem(LS_CUSTOM_URL, url);
+    document.getElementById('inp-custom-url').value = url;
+}
+
+function switchTab(el, name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('panel-' + name).classList.add('active');
+}
+
+function goBack() {
+    Object.keys(countdownTimers).forEach(k => { clearInterval(countdownTimers[k]); delete countdownTimers[k]; });
+    clearSavedSession();
+    document.getElementById('section-results').style.display = 'none';
+    document.getElementById('section-config').style.display  = 'block';
+    document.getElementById('btn-logout').style.display = 'none';
+    document.getElementById('btn-refresh-token').style.display = 'none';
+    currentSession = null;
+    showStatus('', '');
+    // Reset tabs to "Callback"
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelector('.tab[data-panel="callback"]').classList.add('active');
+    document.getElementById('panel-callback').classList.add('active');
+}
+
+
+
+/* ── Helpers: JWT ───────────────────────────────────────────── */
+function decodeB64url(s) {
+    const padded = s.replace(/-/g,'+').replace(/_/g,'/') + '==='.slice(0, (4 - s.length % 4) % 4);
+    return JSON.parse(atob(padded));
+}
+
+function decodeJWT(token) {
+    const [h, p, s] = token.split('.');
+    return { header: decodeB64url(h), payload: decodeB64url(p), sig: s, raw: { h, p, s } };
+}
+
+function highlight(obj) {
+    const json = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
+    return json.replace(
+        /("(?:\\u[0-9a-fA-F]{4}|\\[^u]|[^\\"])*"(?:\s*:)?|\b(?:true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+        m => {
+            let cls = 'json-number';
+            if (/^"/.test(m)) cls = /:$/.test(m) ? 'json-key' : 'json-string';
+            else if (/true|false/.test(m)) cls = 'json-boolean';
+            else if (/null/.test(m)) cls = 'json-null';
+            return `<span class="${cls}">${m}</span>`;
+        }
+    );
+}
+
+function renderJWTStrip(elId, raw) {
+    document.getElementById(elId).innerHTML =
+        `<span class="jwt-h">${raw.h}</span><span class="jwt-dot">.</span>` +
+        `<span class="jwt-p">${raw.p}</span><span class="jwt-dot">.</span>` +
+        `<span class="jwt-s">${raw.s}</span>`;
+}
+
+function ts(unix) {
+    if (!unix) return null;
+    return new Date(unix * 1000).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'medium' });
+}
+
+function formatDuration(diffMs) {
+    const abs = Math.abs(diffMs);
+    if (abs >= 86400000) return `${Math.round(abs / 3600000)} h`;
+    if (abs >= 3600000)  return `${Math.round(abs / 60000)} min`;
+    if (abs >= 60000)    return `${Math.round(abs / 1000)} s`;
+    return `${Math.round(abs / 1000)} s`;
+}
+
+function renderChips(elId, payload) {
+    // Clear any running countdown for this element
+    if (countdownTimers[elId]) { clearInterval(countdownTimers[elId]); delete countdownTimers[elId]; }
+
+    const el = document.getElementById(elId);
+    const chips = [];
+    if (payload.iat) chips.push({ lbl: 'Issued at', val: ts(payload.iat) });
+    if (payload.exp) {
+        const diff    = payload.exp * 1000 - Date.now();
+        const expired = diff < 0;
+        chips.push({ lbl: 'Valid until', val: ts(payload.exp), expired });
+        chips.push({ lbl: expired ? 'Expired' : 'Expires in', val: formatDuration(diff), expired, countdownId: `chip-exp-${elId}` });
+    }
+    el.innerHTML = chips.map(c =>
+        `<div class="chip${c.expired?' expired':''}"${c.countdownId?` id="${c.countdownId}"`:''}><span class="lbl">${c.lbl}:</span><span class="val">${c.val}</span></div>`
+    ).join('');
+
+    if (payload.exp) {
+        const diff = payload.exp * 1000 - Date.now();
+        if (diff > 0 && diff < 15000) startCountdown(elId, payload.exp);
+    }
+}
+
+function startCountdown(elId, expUnix) {
+    if (countdownTimers[elId]) clearInterval(countdownTimers[elId]);
+    const chipId = `chip-exp-${elId}`;
+    countdownTimers[elId] = setInterval(() => {
+        const chip = document.getElementById(chipId);
+        if (!chip) { clearInterval(countdownTimers[elId]); delete countdownTimers[elId]; return; }
+        const diff = expUnix * 1000 - Date.now();
+        if (diff <= 0) {
+            clearInterval(countdownTimers[elId]);
+            delete countdownTimers[elId];
+            chip.className = 'chip expired';
+            chip.innerHTML = '<span class="lbl">Expired:</span><span class="val">0 s</span>';
+            // also mark "Valid until" chip as expired
+            const sibling = chip.previousElementSibling;
+            if (sibling) sibling.classList.add('expired');
+            return;
+        }
+        chip.innerHTML = `<span class="lbl">Expires in:</span><span class="val">${Math.ceil(diff / 1000)} s</span>`;
+    }, 250);
+}
+
+/* ── PKCE ───────────────────────────────────────────────────── */
+async function generatePKCE() {
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
+    const verifier = btoa(String.fromCharCode(...array))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    const hashed = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+    const challenge = btoa(String.fromCharCode(...new Uint8Array(hashed)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    return { verifier, challenge };
+}
+
+/* ── OIDC Flow ──────────────────────────────────────────────── */
+let pendingCode      = null; // stores the auth code received in the callback
+let currentSession   = null; // { id_token, env, end_session_endpoint }
+const countdownTimers = {};  // elId → intervalId
+function redirectURI() {
+    const uri = window.location.origin + window.location.pathname;
+    return uri.replace(/\/$/, ''); // strip trailing slash to match Keycloak registration
+}
+
+async function startLogin() {
+    const env      = document.getElementById('sel-env').value;
+    const clientId = document.getElementById('inp-client').value.trim();
+    const acr        = document.getElementById('inp-acr').value.trim();
+    const loginHint  = document.getElementById('inp-login-hint').value.trim();
+
+    if (!clientId) { showStatus('Please enter a Client ID.', 'error'); return; }
+
+    // Open the window immediately and synchronously in response to the user click.
+    // Browsers block window.open() called after an await (no longer a trusted user gesture).
+    const loginWindow = window.open('', '_blank');
+    if (!loginWindow) {
+        showStatus('Popup was blocked. Please allow popups for this page.', 'error');
+        return;
+    }
+
+    showStatus('Loading OIDC configuration…', 'loading');
+
+    let oidcMeta;
+    try {
+        const r = await fetch(`${getIssuerUrl(env)}/.well-known/openid-configuration`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        oidcMeta = await r.json();
+    } catch (e) {
+        loginWindow.close();
+        showStatus(`OIDC discovery failed: ${e.message}`, 'error');
+        return;
+    }
+
+    const pkce = await generatePKCE();
+
+    // Use localStorage so the callback window (new window) can read these values
+    localStorage.setItem(LS + 'client_id',            clientId);
+    localStorage.setItem(LS + 'env',                  env);
+    localStorage.setItem(LS + 'token_endpoint',       oidcMeta.token_endpoint);
+    localStorage.setItem(LS + 'end_session_endpoint', oidcMeta.end_session_endpoint || '');
+    localStorage.setItem(LS + 'code_verifier',        pkce.verifier);
+    localStorage.setItem(LS + 'curl_only',            document.getElementById('chk-curl-only').checked ? '1' : '');
+
+    const scopes = document.getElementById('inp-scope').value.trim().split(/\s+/).filter(Boolean);
+    if (!scopes.includes('openid')) scopes.unshift('openid');
+    if (document.getElementById('chk-offline').checked && !scopes.includes('offline_access')) scopes.push('offline_access');
+
+    const params = new URLSearchParams({
+        response_type:         'code',
+        client_id:             clientId,
+        redirect_uri:          redirectURI(),
+        scope:                 scopes.join(' '),
+        code_challenge:        pkce.challenge,
+        code_challenge_method: 'S256',
+    });
+    if (acr) params.set('acr_values', acr);
+    if (loginHint) params.set('login_hint', loginHint);
+    if (document.getElementById('chk-force-login').checked) params.set('prompt', 'login');
+
+    const authUrl = `${oidcMeta.authorization_endpoint}?${params}`;
+
+    // Display the URL so it can be opened manually if the popup is blocked
+    document.getElementById('auth-url-pre').textContent = authUrl;
+    document.getElementById('auth-url-box').style.display = 'block';
+
+    showStatus('Login window opened.', 'loading');
+    loginWindow.location.href = authUrl;
+}
+
+function copyAuthUrl() {
+    const url = document.getElementById('auth-url-pre').textContent;
+    navigator.clipboard.writeText(url).then(() => {
+        showStatus('Authorization URL copied to clipboard.', 'success');
+    });
+}
+
+/* ── Device Authorization Grant (RFC 8628) ──────────────────── */
+let devicePollActive = false;
+let devicePollTimer  = null;
+
+async function startDeviceFlow() {
+    const env      = document.getElementById('sel-env').value;
+    const clientId = document.getElementById('inp-client').value.trim();
+    if (!clientId) { showStatus('Please enter a Client ID.', 'error'); return; }
+
+    showStatus('Loading OIDC configuration…', 'loading');
+
+    let oidcMeta;
+    try {
+        const r = await fetch(`${getIssuerUrl(env)}/.well-known/openid-configuration`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        oidcMeta = await r.json();
+    } catch (e) {
+        showStatus(`OIDC discovery failed: ${e.message}`, 'error');
+        return;
+    }
+
+    if (!oidcMeta.device_authorization_endpoint) {
+        showStatus('This server does not support the Device Authorization Grant (no device_authorization_endpoint in OIDC metadata).', 'error');
+        return;
+    }
+
+    const scopes = document.getElementById('inp-scope').value.trim().split(/\s+/).filter(Boolean);
+    if (!scopes.includes('openid')) scopes.unshift('openid');
+    if (document.getElementById('chk-offline').checked && !scopes.includes('offline_access')) scopes.push('offline_access');
+
+    const deviceParams = { client_id: clientId, scope: scopes.join(' ') };
+    let deviceData;
+    try {
+        const r = await fetch(oidcMeta.device_authorization_endpoint, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body:    new URLSearchParams(deviceParams).toString(),
+        });
+        if (!r.ok) {
+            let errMsg = `HTTP ${r.status}`;
+            try { const j = await r.json(); errMsg = j.error_description || j.error || errMsg; } catch (_) {}
+            throw new Error(errMsg);
+        }
+        deviceData = await r.json();
+    } catch (e) {
+        const isCors = e.message.toLowerCase().includes('failed to fetch') || e.message.toLowerCase().includes('network');
+        showStatus(
+            `Device authorization request failed: ${e.message}` +
+            (isCors ? ' — check Web Origins in Keycloak client config (add this page\'s origin) and that "OAuth 2.0 Device Authorization Grant" is enabled on the client.' : ''),
+            'error'
+        );
+        showCurlHint(oidcMeta.device_authorization_endpoint, deviceParams);
+        return;
+    }
+
+    showStatus('', '');
+    document.getElementById('section-config').style.display = 'none';
+    document.getElementById('section-device').style.display = 'block';
+
+    // Show user code and verification URL
+    const verifyHref = deviceData.verification_uri_complete || deviceData.verification_uri;
+    document.getElementById('device-verify-link').textContent = deviceData.verification_uri;
+    document.getElementById('device-verify-link').href        = verifyHref;
+    document.getElementById('device-user-code').textContent   = deviceData.user_code;
+    document.getElementById('device-code-area').style.display = 'block';
+
+    // QR code (encodes the complete URI so the user_code is pre-filled)
+    const qrEl = document.getElementById('device-qr');
+    qrEl.innerHTML = '';
+    new QRCode(qrEl, {
+        text:         verifyHref,
+        width:        180,
+        height:       180,
+        colorDark:    '#0f172a',
+        colorLight:   '#f1f5f9',
+        correctLevel: QRCode.CorrectLevel.M,
+    });
+    document.getElementById('device-poll-status').innerHTML =
+        '<div class="status status-loading show">Waiting for authorization…</div>';
+
+    // Expiry countdown
+    const expiresAt = Date.now() + deviceData.expires_in * 1000;
+    function updateExpiry() {
+        const remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+        document.getElementById('device-expires-label').textContent =
+            remaining > 0 ? `Code expires in ${remaining} s` : 'Code expired';
+    }
+    updateExpiry();
+    const expiryTimer = setInterval(updateExpiry, 1000);
+
+    // Start polling
+    devicePollActive = true;
+    const intervalMs = (deviceData.interval || 5) * 1000;
+
+    async function poll(currentInterval) {
+        if (!devicePollActive) { clearInterval(expiryTimer); return; }
+        if (Date.now() >= expiresAt) {
+            clearInterval(expiryTimer);
+            devicePollActive = false;
+            document.getElementById('device-poll-status').innerHTML =
+                '<div class="status status-error show">Code expired — please start again.</div>';
+            return;
+        }
+
+        let data, ok;
+        try {
+            const r = await fetch(oidcMeta.token_endpoint, {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body:    new URLSearchParams({
+                    grant_type:  'urn:ietf:params:oauth:grant-type:device_code',
+                    client_id:   clientId,
+                    device_code: deviceData.device_code,
+                }).toString(),
+            });
+            data = await r.json();
+            ok   = r.ok;
+        } catch (_) {
+            // Network error — keep polling
+            devicePollTimer = setTimeout(() => poll(currentInterval), currentInterval);
+            return;
+        }
+
+        if (ok) {
+            clearInterval(expiryTimer);
+            devicePollActive = false;
+            onDeviceFlowSuccess(data, clientId, oidcMeta, env);
+            return;
+        }
+
+        if (data.error === 'authorization_pending') {
+            devicePollTimer = setTimeout(() => poll(currentInterval), currentInterval);
+            return;
+        }
+
+        if (data.error === 'slow_down') {
+            const next = currentInterval + 5000;
+            devicePollTimer = setTimeout(() => poll(next), next);
+            return;
+        }
+
+        // Any other error — abort
+        clearInterval(expiryTimer);
+        devicePollActive = false;
+        document.getElementById('device-poll-status').innerHTML =
+            `<div class="status status-error show">${data.error_description || data.error || 'Unexpected error'}</div>`;
+    }
+
+    devicePollTimer = setTimeout(() => poll(intervalMs), intervalMs);
+}
+
+function onDeviceFlowSuccess(tokenData, clientId, oidcMeta, env) {
+    document.getElementById('section-device').style.display  = 'none';
+    document.getElementById('section-results').style.display = 'block';
+
+    currentSession = {
+        id_token:             tokenData.id_token     || null,
+        refresh_token:        tokenData.refresh_token || null,
+        access_token:         tokenData.access_token  || null,
+        client_id:            clientId,
+        token_endpoint:       oidcMeta.token_endpoint,
+        env,
+        end_session_endpoint: oidcMeta.end_session_endpoint || '',
+    };
+    saveSession();
+    showStatus('Successfully authenticated via Device Flow.', 'success');
+    document.getElementById('manual-exchange-box').style.display = 'none';
+    if (oidcMeta.end_session_endpoint) document.getElementById('btn-logout').style.display = '';
+    if (tokenData.refresh_token)        document.getElementById('btn-refresh-token').style.display = '';
+
+    document.getElementById('pre-raw').innerHTML = highlight(tokenData);
+
+    if (tokenData.access_token) {
+        try {
+            const jwt = decodeJWT(tokenData.access_token);
+            renderJWTStrip('jwt-strip-access', jwt.raw);
+            renderChips('chips-access', jwt.payload);
+            document.getElementById('pre-access-header').innerHTML  = highlight(jwt.header);
+            document.getElementById('pre-access-payload').innerHTML = highlight(jwt.payload);
+        } catch (e) {
+            document.getElementById('pre-access-payload').textContent = 'Failed to decode: ' + e.message;
+        }
+    }
+    if (tokenData.id_token) {
+        try {
+            const jwt = decodeJWT(tokenData.id_token);
+            renderJWTStrip('jwt-strip-id', jwt.raw);
+            renderChips('chips-id', jwt.payload);
+            document.getElementById('pre-id-header').innerHTML  = highlight(jwt.header);
+            document.getElementById('pre-id-payload').innerHTML = highlight(jwt.payload);
+        } catch (e) {
+            document.getElementById('pre-id-payload').textContent = 'Failed to decode: ' + e.message;
+        }
+    }
+    if (tokenData.refresh_token) {
+        document.getElementById('tab-refresh').style.display = 'block';
+        document.getElementById('pre-refresh').textContent = tokenData.refresh_token;
+    }
+}
+
+function cancelDeviceFlow() {
+    devicePollActive = false;
+    if (devicePollTimer) { clearTimeout(devicePollTimer); devicePollTimer = null; }
+    document.getElementById('section-device').style.display   = 'none';
+    document.getElementById('section-config').style.display   = 'block';
+    document.getElementById('device-code-area').style.display = 'none';
+    document.getElementById('device-poll-status').innerHTML   = '';
+    showStatus('', '');
+}
+
+function copyActionUrl() {
+    navigator.clipboard.writeText(document.getElementById('action-url-pre').textContent)
+        .then(() => showStatus('Action URL copied to clipboard.', 'success'));
+}
+
+async function handleCallback() {
+    const p     = new URLSearchParams(window.location.search);
+    const code  = p.get('code');
+    const err   = p.get('error');
+
+    if (err) {
+        showStatus(`Error: ${err} – ${p.get('error_description') || ''}`, 'error');
+        window.history.replaceState({}, '', window.location.pathname);
+        return;
+    }
+
+    const kcActionStatus = p.get('kc_action_status');
+    if (kcActionStatus) {
+        // Returned from a kc_action popup — clean URL and stop, let parent window handle it
+        window.history.replaceState({}, '', window.location.pathname);
+        return;
+    }
+
+    if (!code) { await restoreSession(); return; }
+
+    pendingCode = code;
+
+    // Capture all callback params and show them immediately
+    const callbackDebug = {};
+    for (const [k, v] of p.entries()) callbackDebug[k] = v;
+    callbackDebug['_raw_url'] = window.location.href;
+
+    // Clean URL immediately
+    window.history.replaceState({}, '', window.location.pathname);
+
+    // Show results section with callback tab right away
+    document.getElementById('section-config').style.display  = 'none';
+    document.getElementById('section-results').style.display = 'block';
+    document.getElementById('pre-callback').innerHTML = highlight(callbackDebug);
+
+    const clientId           = localStorage.getItem(LS + 'client_id');
+    const env                = localStorage.getItem(LS + 'env');
+    const tokenEndpoint      = localStorage.getItem(LS + 'token_endpoint');
+    const endSessionEndpoint = localStorage.getItem(LS + 'end_session_endpoint');
+    const curlOnly           = localStorage.getItem(LS + 'curl_only') === '1';
+
+    if (!clientId || !tokenEndpoint) {
+        showStatus('No active session – enter Client ID and environment to exchange the code manually.', 'error');
+        document.getElementById('manual-exchange-box').style.display = 'block';
+        return;
+    }
+
+    localStorage.removeItem(LS + 'client_id');
+    localStorage.removeItem(LS + 'env');
+    localStorage.removeItem(LS + 'token_endpoint');
+    localStorage.removeItem(LS + 'end_session_endpoint');
+    localStorage.removeItem(LS + 'curl_only');
+
+    if (env) { document.getElementById('sel-env').value = env; onEnvChange(); }
+
+    if (curlOnly) {
+        const codeVerifier = localStorage.getItem(LS + 'code_verifier');
+        localStorage.removeItem(LS + 'code_verifier');
+        const params = {
+            grant_type:   'authorization_code',
+            client_id:    clientId,
+            code,
+            redirect_uri: redirectURI(),
+        };
+        if (codeVerifier) params.code_verifier = codeVerifier;
+        showCurlHint(tokenEndpoint, params);
+        showStatus('curl only mode — code not exchanged, run the command below to see the full Keycloak response.', 'loading');
+        return;
+    }
+
+    await doTokenExchange({ code, clientId, tokenEndpoint, endSessionEndpoint, env });
+
+    // Raw
+}
+
+async function doTokenExchange({ code, clientId, tokenEndpoint, endSessionEndpoint, env }) {
+    showStatus('Exchanging authorization code for tokens…', 'loading');
+
+    if (env) { document.getElementById('sel-env').value = env; onEnvChange(); }
+
+    const body = new URLSearchParams({
+        grant_type:   'authorization_code',
+        client_id:    clientId,
+        code,
+        redirect_uri: redirectURI(),
+    });
+    const codeVerifier = localStorage.getItem(LS + 'code_verifier');
+    if (codeVerifier) {
+        body.set('code_verifier', codeVerifier);
+        localStorage.removeItem(LS + 'code_verifier');
+    }
+
+    let tokenData;
+    try {
+        tokenData = await fetchToken(tokenEndpoint, body);
+    } catch (e) {
+        showTokenError('Token exchange failed', e);
+        return;
+    }
+
+    pendingCode = null;
+    currentSession = {
+        id_token:             tokenData.id_token || null,
+        refresh_token:        tokenData.refresh_token || null,
+        access_token:         tokenData.access_token || null,
+        client_id:            clientId,
+        token_endpoint:       tokenEndpoint,
+        env,
+        end_session_endpoint: endSessionEndpoint || '',
+    };
+    saveSession();
+    showStatus('Successfully authenticated.', 'success');
+    document.getElementById('manual-exchange-box').style.display = 'none';
+    if (endSessionEndpoint) document.getElementById('btn-logout').style.display = '';
+    if (tokenData.refresh_token) document.getElementById('btn-refresh-token').style.display = '';
+
+    document.getElementById('pre-raw').innerHTML = highlight(tokenData);
+
+    // Access Token
+    if (tokenData.access_token) {
+        try {
+            const jwt = decodeJWT(tokenData.access_token);
+            renderJWTStrip('jwt-strip-access', jwt.raw);
+            renderChips('chips-access', jwt.payload);
+            document.getElementById('pre-access-header').innerHTML  = highlight(jwt.header);
+            document.getElementById('pre-access-payload').innerHTML = highlight(jwt.payload);
+        } catch (e) {
+            document.getElementById('pre-access-payload').textContent = 'Failed to decode: ' + e.message;
+        }
+    }
+
+    // ID Token
+    if (tokenData.id_token) {
+        try {
+            const jwt = decodeJWT(tokenData.id_token);
+            renderJWTStrip('jwt-strip-id', jwt.raw);
+            renderChips('chips-id', jwt.payload);
+            document.getElementById('pre-id-header').innerHTML  = highlight(jwt.header);
+            document.getElementById('pre-id-payload').innerHTML = highlight(jwt.payload);
+        } catch (e) {
+            document.getElementById('pre-id-payload').textContent = 'Failed to decode: ' + e.message;
+        }
+    }
+
+    // Refresh Token
+    if (tokenData.refresh_token) {
+        document.getElementById('tab-refresh').style.display = 'block';
+        document.getElementById('pre-refresh').textContent = tokenData.refresh_token;
+    }
+}
+
+async function manualExchange() {
+    const env      = document.getElementById('me-env').value;
+    const clientId = document.getElementById('me-client').value.trim();
+
+    if (!clientId)       { showStatus('Please enter a Client ID.', 'error'); return; }
+    if (!pendingCode)    { showStatus('No code available.', 'error'); return; }
+
+    showStatus('Loading OIDC configuration…', 'loading');
+
+    let tokenEndpoint, endSessionEndpoint;
+    try {
+        const r = await fetch(`${getIssuerUrl(env)}/.well-known/openid-configuration`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const meta = await r.json();
+        tokenEndpoint      = meta.token_endpoint;
+        endSessionEndpoint = meta.end_session_endpoint || '';
+    } catch (e) {
+        showStatus(`OIDC discovery failed: ${e.message}`, 'error');
+        return;
+    }
+
+    await doTokenExchange({ code: pendingCode, clientId, tokenEndpoint, endSessionEndpoint, env });
+}
+
+/* ── Token Fetch Helper ─────────────────────────────────────── */
+async function fetchToken(endpoint, body) {
+    let r, tokenData;
+    try {
+        r = await fetch(endpoint, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body:    body.toString(),
+        });
+    } catch (e) {
+        // Network-level error (CORS, offline, SSL, mixed content, …)
+        const hint = ' (likely CORS – add this page\'s origin to the Keycloak client\'s Web Origins, or network/SSL issue)';
+        const err = new Error(`Network error – ${e.message}${hint}`);
+        err.debug = {
+            type:     'network',
+            endpoint,
+            params:   Object.fromEntries(body),
+            original: e.message,
+        };
+        throw err;
+    }
+
+    try {
+        tokenData = await r.json();
+    } catch (e) {
+        const err = new Error(`HTTP ${r.status} – response is not JSON`);
+        err.debug = { type: 'parse', endpoint, status: r.status };
+        throw err;
+    }
+
+    if (!r.ok) {
+        const msg = tokenData.error_description || tokenData.error || `HTTP ${r.status}`;
+        const err = new Error(msg);
+        err.debug = { type: 'oauth', endpoint, status: r.status, response: tokenData };
+        throw err;
+    }
+
+    return tokenData;
+}
+
+function showTokenError(context, e) {
+    showStatus(`${context}: ${e.message}`, 'error');
+    if (e.debug) {
+        console.error(`[OIDC] ${context}`, e.debug);
+        if (e.debug.endpoint && e.debug.params) showCurlHint(e.debug.endpoint, e.debug.params);
+    }
+}
+
+function showCurlHint(endpoint, params) {
+    const flags = Object.entries(params)
+        .map(([k, v]) => `  --data-urlencode '${k}=${v}'`)
+        .join(' \\\n');
+    const cmd = `curl -v -X POST '${endpoint}' \\\n  -H 'Content-Type: application/x-www-form-urlencoded' \\\n${flags}`;
+    document.getElementById('curl-pre').textContent = cmd;
+    document.getElementById('curl-hint').style.display = 'block';
+}
+
+function copyCurl() {
+    navigator.clipboard.writeText(document.getElementById('curl-pre').textContent)
+        .then(() => showStatus('curl command copied.', 'success'));
+}
+
+/* ── Token Refresh ──────────────────────────────────────────── */
+async function refreshTokens() {
+    if (!currentSession?.refresh_token) return;
+
+    const btn = document.getElementById('btn-refresh-token');
+    btn.disabled = true;
+    btn.textContent = '↻ Refreshing…';
+    showStatus('Refreshing tokens…', 'loading');
+
+    let tokenData;
+    try {
+        tokenData = await fetchToken(currentSession.token_endpoint, new URLSearchParams({
+            grant_type:    'refresh_token',
+            client_id:     currentSession.client_id,
+            refresh_token: currentSession.refresh_token,
+        }));
+    } catch (e) {
+        showTokenError('Refresh failed', e);
+        btn.disabled = false;
+        btn.textContent = '↻ Refresh Access Token';
+        return;
+    }
+
+    // Update session state with new tokens
+    currentSession.refresh_token = tokenData.refresh_token || currentSession.refresh_token;
+    currentSession.id_token      = tokenData.id_token      || currentSession.id_token;
+    currentSession.access_token  = tokenData.access_token  || currentSession.access_token;
+    saveSession();
+
+    showStatus('Tokens refreshed successfully.', 'success');
+    btn.disabled = false;
+    btn.textContent = '↻ Refresh Access Token';
+
+    // Raw
+    document.getElementById('pre-raw').innerHTML = highlight(tokenData);
+
+    // Access Token
+    if (tokenData.access_token) {
+        try {
+            const jwt = decodeJWT(tokenData.access_token);
+            renderJWTStrip('jwt-strip-access', jwt.raw);
+            renderChips('chips-access', jwt.payload);
+            document.getElementById('pre-access-header').innerHTML  = highlight(jwt.header);
+            document.getElementById('pre-access-payload').innerHTML = highlight(jwt.payload);
+        } catch (e) {
+            document.getElementById('pre-access-payload').textContent = 'Failed to decode: ' + e.message;
+        }
+    }
+
+    // ID Token (may or may not be returned on refresh)
+    if (tokenData.id_token) {
+        try {
+            const jwt = decodeJWT(tokenData.id_token);
+            renderJWTStrip('jwt-strip-id', jwt.raw);
+            renderChips('chips-id', jwt.payload);
+            document.getElementById('pre-id-header').innerHTML  = highlight(jwt.header);
+            document.getElementById('pre-id-payload').innerHTML = highlight(jwt.payload);
+        } catch (e) {
+            document.getElementById('pre-id-payload').textContent = 'Failed to decode: ' + e.message;
+        }
+    }
+
+    // Refresh Token (Keycloak rotates it by default)
+    if (tokenData.refresh_token) {
+        document.getElementById('tab-refresh').style.display = 'block';
+        document.getElementById('pre-refresh').textContent = tokenData.refresh_token;
+    }
+}
+
+/* ── Logout ─────────────────────────────────────────────────── */
+async function logout() {
+    if (!currentSession) return;
+
+    let endSessionEndpoint = currentSession.end_session_endpoint;
+    if (!endSessionEndpoint) {
+        // Fallback: re-fetch discovery to get end_session_endpoint
+        try {
+            const r = await fetch(`${getIssuerUrl(currentSession.env)}/.well-known/openid-configuration`);
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            endSessionEndpoint = (await r.json()).end_session_endpoint || '';
+        } catch (e) {
+            showStatus(`Logout failed: ${e.message}`, 'error');
+            return;
+        }
+    }
+
+    if (!endSessionEndpoint) {
+        showStatus('No end_session_endpoint available for this environment.', 'error');
+        return;
+    }
+
+    const params = new URLSearchParams({ post_logout_redirect_uri: redirectURI() });
+    if (currentSession.id_token) params.set('id_token_hint', currentSession.id_token);
+
+    const logoutUrl = `${endSessionEndpoint}?${params}`;
+    const popup = window.open(logoutUrl, '_blank', 'width=520,height=620');
+
+    if (!popup) {
+        // Popup blocked — fallback: navigate main window
+        window.location.href = logoutUrl;
+        return;
+    }
+
+    showStatus('Logging out…', 'loading');
+
+    const poll = setInterval(() => {
+        if (popup.closed) {
+            clearInterval(poll);
+            currentSession = null;
+            clearSavedSession();
+            document.getElementById('btn-logout').style.display = 'none';
+            goBack();
+            showStatus('Logged out.', 'success');
+            return;
+        }
+        try {
+            if (popup.location.origin === window.location.origin) {
+                clearInterval(poll);
+                popup.close();
+                currentSession = null;
+                clearSavedSession();
+                document.getElementById('btn-logout').style.display = 'none';
+                goBack();
+                showStatus('Logged out successfully.', 'success');
+            }
+        } catch (_) {
+            // Cross-origin (still on Keycloak) — keep polling
+        }
+    }, 300);
+}
+
+/* ── Session Persistence ────────────────────────────────────── */
+const LS_SESSION = LS + 'session';
+
+function saveSession() {
+    if (currentSession) localStorage.setItem(LS_SESSION, JSON.stringify(currentSession));
+}
+
+function clearSavedSession() {
+    localStorage.removeItem(LS_SESSION);
+}
+
+async function restoreSession() {
+    const stored = localStorage.getItem(LS_SESSION);
+    if (!stored) return;
+
+    let session;
+    try { session = JSON.parse(stored); } catch (_) { clearSavedSession(); return; }
+    if (!session?.refresh_token || !session?.token_endpoint) { clearSavedSession(); return; }
+
+    showStatus('Restoring session…', 'loading');
+
+    let tokenData;
+    try {
+        tokenData = await fetchToken(session.token_endpoint, new URLSearchParams({
+            grant_type:    'refresh_token',
+            client_id:     session.client_id,
+            refresh_token: session.refresh_token,
+        }));
+    } catch (e) {
+        clearSavedSession();
+        showStatus('Previous session expired — please log in again.', 'error');
+        return;
+    }
+
+    session.access_token  = tokenData.access_token  || session.access_token;
+    session.refresh_token = tokenData.refresh_token || session.refresh_token;
+    session.id_token      = tokenData.id_token      || session.id_token;
+    currentSession = session;
+    saveSession();
+
+    if (session.env) { document.getElementById('sel-env').value = session.env; onEnvChange(); }
+
+    document.getElementById('section-config').style.display  = 'none';
+    document.getElementById('section-results').style.display = 'block';
+    document.getElementById('manual-exchange-box').style.display = 'none';
+    if (session.end_session_endpoint) document.getElementById('btn-logout').style.display = '';
+    if (tokenData.refresh_token)      document.getElementById('btn-refresh-token').style.display = '';
+
+    showStatus('Session restored.', 'success');
+
+    document.getElementById('pre-raw').innerHTML = highlight(tokenData);
+
+    if (tokenData.access_token) {
+        try {
+            const jwt = decodeJWT(tokenData.access_token);
+            renderJWTStrip('jwt-strip-access', jwt.raw);
+            renderChips('chips-access', jwt.payload);
+            document.getElementById('pre-access-header').innerHTML  = highlight(jwt.header);
+            document.getElementById('pre-access-payload').innerHTML = highlight(jwt.payload);
+        } catch (_) {}
+    }
+    if (tokenData.id_token) {
+        try {
+            const jwt = decodeJWT(tokenData.id_token);
+            renderJWTStrip('jwt-strip-id', jwt.raw);
+            renderChips('chips-id', jwt.payload);
+            document.getElementById('pre-id-header').innerHTML  = highlight(jwt.header);
+            document.getElementById('pre-id-payload').innerHTML = highlight(jwt.payload);
+        } catch (_) {}
+    }
+    if (tokenData.refresh_token) {
+        document.getElementById('tab-refresh').style.display = 'block';
+        document.getElementById('pre-refresh').textContent = tokenData.refresh_token;
+    }
+}
+
+/* ── Settings Persistence ───────────────────────────────────── */
+const LS_SETTINGS = LS + 'settings';
+
+function saveSettings() {
+    const s = {
+        env:        document.getElementById('sel-env').value,
+        customUrl:  document.getElementById('inp-custom-url').value,
+        clientId:   document.getElementById('inp-client').value,
+        scope:      document.getElementById('inp-scope').value,
+        acr:        document.getElementById('inp-acr').value,
+        loginHint:  document.getElementById('inp-login-hint').value,
+        forceLogin: document.getElementById('chk-force-login').checked,
+        offline:    document.getElementById('chk-offline').checked,
+        curlOnly:   document.getElementById('chk-curl-only').checked,
+    };
+    localStorage.setItem(LS_SETTINGS, JSON.stringify(s));
+}
+
+function loadSettings() {
+    const raw = localStorage.getItem(LS_SETTINGS);
+    if (!raw) return;
+    let s;
+    try { s = JSON.parse(raw); } catch (_) { return; }
+    if (s.customUrl) {
+        localStorage.setItem(LS_CUSTOM_URL, s.customUrl);
+        document.getElementById('inp-custom-url').value = s.customUrl;
+    } else {
+        const stored = localStorage.getItem(LS_CUSTOM_URL);
+        if (stored) document.getElementById('inp-custom-url').value = stored;
+    }
+    if (s.env)       { document.getElementById('sel-env').value = s.env; onEnvChange(); }
+    if (s.clientId)  document.getElementById('inp-client').value       = s.clientId;
+    if (s.scope)     document.getElementById('inp-scope').value         = s.scope;
+    if (s.acr)       document.getElementById('inp-acr').value           = s.acr;
+    if (s.loginHint) document.getElementById('inp-login-hint').value    = s.loginHint;
+    document.getElementById('chk-force-login').checked = !!s.forceLogin;
+    document.getElementById('chk-offline').checked     = !!s.offline;
+    document.getElementById('chk-curl-only').checked   = !!s.curlOnly;
+}
+
+/* ── Init ───────────────────────────────────────────────────── */
+document.getElementById('lbl-redirect').textContent = redirectURI();
+loadSettings();
+['sel-env','inp-client','inp-scope','inp-acr','inp-login-hint'].forEach(id =>
+    document.getElementById(id).addEventListener('input', saveSettings));
+['sel-env','chk-force-login','chk-offline','chk-curl-only'].forEach(id =>
+    document.getElementById(id).addEventListener('change', saveSettings));
+window.addEventListener('load', handleCallback);
+</script>
+</body>
+</html>
