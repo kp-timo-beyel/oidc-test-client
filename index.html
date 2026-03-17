@@ -352,6 +352,10 @@
                     <label for="inp-login-hint">Login Hint <span class="opt">(optional)</span></label>
                     <input id="inp-login-hint" type="text" placeholder="e.g. user@example.com" />
                 </div>
+                <div class="form-group">
+                    <label for="inp-max-age">Max Age <span class="opt">(optional, seconds)</span></label>
+                    <input id="inp-max-age" type="number" min="0" placeholder="e.g. 0" />
+                </div>
                 <div class="form-group span2">
                     <label style="flex-direction:row;align-items:center;gap:0.5rem;cursor:pointer;">
                         <input id="chk-force-login" type="checkbox" style="width:auto;accent-color:#3b82f6;" />
@@ -374,6 +378,18 @@
             <div class="actions">
                 <button class="btn btn-primary" onclick="startLogin()">Start Login →</button>
                 <button class="btn btn-ghost" onclick="startDeviceFlow()">Device Flow</button>
+            </div>
+            <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid #334155;">
+                <div class="card-title" style="margin-bottom:0.75rem;">Account Actions</div>
+                <div class="actions" style="margin-top:0;">
+                    <button class="btn btn-ghost" onclick="startKcAction('webauthn-register-passwordless')">Register Passkey</button>
+                    <button class="btn btn-ghost" onclick="startKcAction('webauthn-register')">Register WebAuthn MFA</button>
+                    <button class="btn btn-ghost" onclick="startKcAction('CONFIGURE_TOTP')">Configure TOTP</button>
+                    <button class="btn btn-ghost" onclick="startKcAction('UPDATE_PASSWORD')">Update Password</button>
+                    <button class="btn btn-ghost" onclick="startKcAction('UPDATE_PROFILE')">Update Profile</button>
+                    <button class="btn btn-ghost" onclick="startKcAction('VERIFY_EMAIL')">Verify Email</button>
+                    <button class="btn btn-ghost" onclick="startKcAction('CONFIGURE_RECOVERY_AUTHN_CODES')">Setup Recovery Codes</button>
+                </div>
             </div>
             <div class="redirect-hint">
                 Redirect&nbsp;URI: <code id="lbl-redirect"></code><br>
@@ -531,6 +547,52 @@ function onEnvChange() {
     badge.textContent = labels[env] || env;
     badge.className   = `badge badge-${env}`;
     document.getElementById('custom-url-group').style.display = env === 'custom' ? '' : 'none';
+    fetchOidcMeta(env).then(updateAuthUrlPreview);
+}
+
+async function fetchOidcMeta(env) {
+    const issuer = getIssuerUrl(env);
+    if (!issuer) return null;
+    if (oidcMetaCache[env]) return oidcMetaCache[env];
+    try {
+        const r = await fetch(`${issuer}/.well-known/openid-configuration`);
+        if (!r.ok) return null;
+        oidcMetaCache[env] = await r.json();
+    } catch (_) { return null; }
+    return oidcMetaCache[env];
+}
+
+function updateAuthUrlPreview() {
+    const env      = document.getElementById('sel-env').value;
+    const clientId = document.getElementById('inp-client').value.trim();
+    const meta     = oidcMetaCache[env];
+    const box      = document.getElementById('auth-url-box');
+
+    if (!meta || !clientId) { box.style.display = 'none'; return; }
+
+    const scopes = document.getElementById('inp-scope').value.trim().split(/\s+/).filter(Boolean);
+    if (!scopes.includes('openid')) scopes.unshift('openid');
+    if (document.getElementById('chk-offline').checked && !scopes.includes('offline_access')) scopes.push('offline_access');
+
+    const acr       = document.getElementById('inp-acr').value.trim();
+    const loginHint = document.getElementById('inp-login-hint').value.trim();
+    const maxAge    = document.getElementById('inp-max-age').value.trim();
+
+    const params = new URLSearchParams({
+        response_type:         'code',
+        client_id:             clientId,
+        redirect_uri:          redirectURI(),
+        scope:                 scopes.join(' '),
+        code_challenge:        '<pkce_challenge>',
+        code_challenge_method: 'S256',
+    });
+    if (acr) params.set('acr_values', acr);
+    if (loginHint) params.set('login_hint', loginHint);
+    if (maxAge !== '') params.set('max_age', maxAge);
+    if (document.getElementById('chk-force-login').checked) params.set('prompt', 'login');
+
+    document.getElementById('auth-url-pre').textContent = `${meta.authorization_endpoint}?${params}`;
+    box.style.display = 'block';
 }
 
 function onMeEnvChange() {
@@ -630,6 +692,7 @@ function renderChips(elId, payload) {
     const el = document.getElementById(elId);
     const chips = [];
     if (payload.iat) chips.push({ lbl: 'Issued at', val: ts(payload.iat) });
+    if (payload.auth_time) chips.push({ lbl: 'Auth time', val: ts(payload.auth_time) });
     if (payload.exp) {
         const diff    = payload.exp * 1000 - Date.now();
         const expired = diff < 0;
@@ -683,6 +746,7 @@ async function generatePKCE() {
 let pendingCode      = null; // stores the auth code received in the callback
 let currentSession   = null; // { id_token, env, end_session_endpoint }
 const countdownTimers = {};  // elId → intervalId
+const oidcMetaCache   = {};  // env  → oidcMeta
 function redirectURI() {
     const uri = window.location.origin + window.location.pathname;
     return uri.replace(/\/$/, ''); // strip trailing slash to match Keycloak registration
@@ -693,6 +757,7 @@ async function startLogin() {
     const clientId = document.getElementById('inp-client').value.trim();
     const acr        = document.getElementById('inp-acr').value.trim();
     const loginHint  = document.getElementById('inp-login-hint').value.trim();
+    const maxAge     = document.getElementById('inp-max-age').value.trim();
 
     if (!clientId) { showStatus('Please enter a Client ID.', 'error'); return; }
 
@@ -708,9 +773,15 @@ async function startLogin() {
 
     let oidcMeta;
     try {
-        const r = await fetch(`${getIssuerUrl(env)}/.well-known/openid-configuration`);
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        oidcMeta = await r.json();
+        const issuer = getIssuerUrl(env);
+        if (oidcMetaCache[env]) {
+            oidcMeta = oidcMetaCache[env];
+        } else {
+            const r = await fetch(`${issuer}/.well-known/openid-configuration`);
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            oidcMeta = await r.json();
+            oidcMetaCache[env] = oidcMeta;
+        }
     } catch (e) {
         loginWindow.close();
         showStatus(`OIDC discovery failed: ${e.message}`, 'error');
@@ -741,13 +812,13 @@ async function startLogin() {
     });
     if (acr) params.set('acr_values', acr);
     if (loginHint) params.set('login_hint', loginHint);
+    if (maxAge !== '') params.set('max_age', maxAge);
     if (document.getElementById('chk-force-login').checked) params.set('prompt', 'login');
 
     const authUrl = `${oidcMeta.authorization_endpoint}?${params}`;
 
-    // Display the URL so it can be opened manually if the popup is blocked
+    // Update preview with real PKCE challenge so the URL can be copied if popup is blocked
     document.getElementById('auth-url-pre').textContent = authUrl;
-    document.getElementById('auth-url-box').style.display = 'block';
 
     showStatus('Login window opened.', 'loading');
     loginWindow.location.href = authUrl;
@@ -758,6 +829,42 @@ function copyAuthUrl() {
     navigator.clipboard.writeText(url).then(() => {
         showStatus('Authorization URL copied to clipboard.', 'success');
     });
+}
+
+async function startKcAction(action) {
+    const env      = document.getElementById('sel-env').value;
+    const clientId = document.getElementById('inp-client').value.trim();
+    if (!clientId) { showStatus('Please enter a Client ID.', 'error'); return; }
+
+    const actionWindow = window.open('', '_blank');
+    if (!actionWindow) {
+        showStatus('Popup was blocked. Please allow popups for this page.', 'error');
+        return;
+    }
+
+    showStatus('Loading OIDC configuration…', 'loading');
+
+    let oidcMeta;
+    try {
+        const r = await fetch(`${getIssuerUrl(env)}/.well-known/openid-configuration`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        oidcMeta = await r.json();
+    } catch (e) {
+        actionWindow.close();
+        showStatus(`OIDC discovery failed: ${e.message}`, 'error');
+        return;
+    }
+
+    const params = new URLSearchParams({
+        client_id:     clientId,
+        redirect_uri:  redirectURI(),
+        response_type: 'code',
+        scope:         'openid',
+        kc_action:     action,
+    });
+
+    showStatus(`Opening ${action} flow…`, 'loading');
+    actionWindow.location.href = `${oidcMeta.authorization_endpoint}?${params}`;
 }
 
 /* ── Device Authorization Grant (RFC 8628) ──────────────────── */
@@ -1430,6 +1537,7 @@ function saveSettings() {
         scope:      document.getElementById('inp-scope').value,
         acr:        document.getElementById('inp-acr').value,
         loginHint:  document.getElementById('inp-login-hint').value,
+        maxAge:     document.getElementById('inp-max-age').value,
         forceLogin: document.getElementById('chk-force-login').checked,
         offline:    document.getElementById('chk-offline').checked,
         curlOnly:   document.getElementById('chk-curl-only').checked,
@@ -1454,6 +1562,7 @@ function loadSettings() {
     if (s.scope)     document.getElementById('inp-scope').value         = s.scope;
     if (s.acr)       document.getElementById('inp-acr').value           = s.acr;
     if (s.loginHint) document.getElementById('inp-login-hint').value    = s.loginHint;
+    if (s.maxAge !== undefined) document.getElementById('inp-max-age').value = s.maxAge;
     document.getElementById('chk-force-login').checked = !!s.forceLogin;
     document.getElementById('chk-offline').checked     = !!s.offline;
     document.getElementById('chk-curl-only').checked   = !!s.curlOnly;
@@ -1462,11 +1571,12 @@ function loadSettings() {
 /* ── Init ───────────────────────────────────────────────────── */
 document.getElementById('lbl-redirect').textContent = redirectURI();
 loadSettings();
-['sel-env','inp-client','inp-scope','inp-acr','inp-login-hint'].forEach(id =>
-    document.getElementById(id).addEventListener('input', saveSettings));
+['sel-env','inp-client','inp-scope','inp-acr','inp-login-hint','inp-max-age'].forEach(id =>
+    document.getElementById(id).addEventListener('input', () => { saveSettings(); updateAuthUrlPreview(); }));
 ['sel-env','chk-force-login','chk-offline','chk-curl-only'].forEach(id =>
-    document.getElementById(id).addEventListener('change', saveSettings));
+    document.getElementById(id).addEventListener('change', () => { saveSettings(); updateAuthUrlPreview(); }));
 window.addEventListener('load', handleCallback);
+fetchOidcMeta(document.getElementById('sel-env').value).then(updateAuthUrlPreview);
 </script>
 </body>
 </html>
